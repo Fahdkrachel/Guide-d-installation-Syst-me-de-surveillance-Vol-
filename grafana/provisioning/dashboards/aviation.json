@@ -1,0 +1,303 @@
+{
+  "title": "Vol AV-247 — Surveillance temps réel",
+  "uid": "aviation-av247",
+  "tags": ["aviation", "iot", "temps-réel"],
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+
+    {
+      "id": 1,
+      "title": "🌡️ Température Moteur (°C)",
+      "type": "gauge",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 6 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT max(valeur_brute) as value FROM iot.sensor_data WHERE capteur_id = 'temperature' AND timestamp >= now() - INTERVAL 10 SECOND",
+        "format": "table"
+      }],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "minVizWidth": 75,
+        "minVizHeight": 75
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 800, "max": 1050, "unit": "celsius",
+          "thresholds": {
+            "steps": [
+              { "value": null,  "color": "green" },
+              { "value": 900,   "color": "yellow" },
+              { "value": 950,   "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 2,
+      "title": "📳 Vibration Moteur (mm/s)",
+      "type": "gauge",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 6 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT max(valeur_brute) as value FROM iot.sensor_data WHERE capteur_id = 'vibration' AND timestamp >= now() - INTERVAL 10 SECOND",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 10, "unit": "velocityms",
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 3.5,  "color": "yellow" },
+              { "value": 5.0,  "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 3,
+      "title": "✈️ Altitude (m)",
+      "type": "gauge",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 6 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT max(valeur_brute) as value FROM iot.sensor_data WHERE capteur_id = 'altitude' AND timestamp >= now() - INTERVAL 10 SECOND",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 13000, "unit": "lengthm",
+          "thresholds": {
+            "steps": [
+              { "value": null,  "color": "green" },
+              { "value": 10500, "color": "yellow" },
+              { "value": 11000, "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 4,
+      "title": "⛽ Carburant (%)",
+      "type": "gauge",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 6 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT max(valeur_brute) as value FROM iot.sensor_data WHERE capteur_id = 'carburant' AND timestamp >= now() - INTERVAL 10 SECOND",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 100, "unit": "percent",
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 20,   "color": "yellow" },
+              { "value": 30,   "color": "green" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 5,
+      "title": "💨 Vitesse Air (km/h)",
+      "type": "gauge",
+      "gridPos": { "x": 0, "y": 6, "w": 6, "h": 6 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT max(valeur_brute) as value FROM iot.sensor_data WHERE capteur_id = 'vitesse' AND timestamp >= now() - INTERVAL 10 SECOND",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 200, "max": 1100, "unit": "velocitykmh",
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 900,  "color": "yellow" },
+              { "value": 950,  "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 6,
+      "title": "🌡️ Pression Cabine (hPa)",
+      "type": "gauge",
+      "gridPos": { "x": 6, "y": 6, "w": 6, "h": 6 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT max(valeur_brute) as value FROM iot.sensor_data WHERE capteur_id = 'pression' AND timestamp >= now() - INTERVAL 10 SECOND",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 700, "max": 1100, "unit": "pressurehpa",
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 900,  "color": "yellow" },
+              { "value": 950,  "color": "green" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 7,
+      "title": "🌬️ Oxygène Cabine (%)",
+      "type": "gauge",
+      "gridPos": { "x": 12, "y": 6, "w": 6, "h": 6 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT max(valeur_brute) as value FROM iot.sensor_data WHERE capteur_id = 'oxygene' AND timestamp >= now() - INTERVAL 10 SECOND",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 10, "max": 25, "unit": "percent",
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 18,   "color": "yellow" },
+              { "value": 19.5, "color": "green" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 8,
+      "title": "💧 Humidité Cabine (%)",
+      "type": "gauge",
+      "gridPos": { "x": 18, "y": 6, "w": 6, "h": 6 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT max(valeur_brute) as value FROM iot.sensor_data WHERE capteur_id = 'humidite' AND timestamp >= now() - INTERVAL 10 SECOND",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 100, "unit": "percent",
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 70,   "color": "yellow" },
+              { "value": 80,   "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 9,
+      "title": "📈 Courbes temporelles — Tous capteurs (valeur normalisée)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT timestamp, capteur_id, avg(valeur_normalisee) as value FROM iot.sensor_data WHERE timestamp >= now() - INTERVAL 30 MINUTE GROUP BY timestamp, capteur_id ORDER BY timestamp",
+        "format": "time_series"
+      }],
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "table", "placement": "right" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "is_anomaly" },
+            "properties": [{ "id": "custom.lineWidth", "value": 0 },
+                           { "id": "custom.pointSize", "value": 6 },
+                           { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" }}]}
+        ]
+      }
+    },
+
+    {
+      "id": 10,
+      "title": "🚨 Alertes en direct — Dernières 30 minutes",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT timestamp, capteur_id as Capteur, type_alerte as Type, valeur_mesuree as Valeur, seuil as Seuil, severite as Sévérité, message_alerte as Message FROM iot.alerts WHERE timestamp >= now() - INTERVAL 30 MINUTE ORDER BY timestamp DESC LIMIT 50",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Sévérité" },
+            "properties": [{
+              "id": "custom.displayMode", "value": "color-background",
+              "thresholds": {
+                "steps": [
+                  { "value": null, "color": "green" },
+                  { "value": 2,    "color": "orange" },
+                  { "value": 3,    "color": "red" }
+                ]
+              }
+            }]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 11,
+      "title": "📊 Z-Score par capteur (30 dernières minutes)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 28, "w": 16, "h": 8 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT timestamp, capteur_id, avg(z_score) as value FROM iot.sensor_data WHERE timestamp >= now() - INTERVAL 30 MINUTE GROUP BY timestamp, capteur_id ORDER BY timestamp",
+        "format": "time_series"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 1 },
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 2,    "color": "yellow" },
+              { "value": 3,    "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 12,
+      "title": "📋 Résumé anomalies",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 28, "w": 8, "h": 8 },
+      "datasource": { "uid": "clickhouse-aviation" },
+      "targets": [{
+        "rawSql": "SELECT countIf(is_anomaly = 1) as Anomalies, countIf(is_anomaly = 0) as Normales, count() as Total FROM iot.sensor_data WHERE timestamp >= now() - INTERVAL 30 MINUTE",
+        "format": "table"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    }
+
+  ]
+}

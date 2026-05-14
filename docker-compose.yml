@@ -1,0 +1,256 @@
+version: '3.8'
+
+# ============================================================
+#  AVIATION IOT — Système de surveillance de vol AV-247
+#  Démarrage : docker compose up -d
+# ============================================================
+
+networks:
+  aviation-net:
+    driver: bridge
+
+volumes:
+  clickhouse-data:
+  grafana-data:
+  zookeeper-data:
+  kafka-data:
+
+services:
+
+  # ─────────────────────────────────────────────
+  # 1. ZOOKEEPER — l'arbitre de Kafka
+  #    Rôle : surveille les brokers Kafka,
+  #           élit un nouveau LEADER si un broker tombe
+  # ─────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    networks:
+      - aviation-net
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # 2. KAFKA BROKER — le transporteur de messages
+  #    Rôle : reçoit les données des capteurs
+  #           et les livre aux TaskManagers Flink
+  # ─────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    networks:
+      - aviation-net
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_HOURS: 24
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:29092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ─────────────────────────────────────────────
+  # 3. KAFKA UI — interface visuelle pour Kafka
+  #    Rôle : voir les topics, messages, consumers
+  #    Accès : http://localhost:8080
+  # ─────────────────────────────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    networks:
+      - aviation-net
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: aviation-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
+  # ─────────────────────────────────────────────
+  # 4. FLINK JobManager — le chef d'orchestre
+  #    Rôle : distribue les tâches aux TaskManagers
+  #    Accès : http://localhost:8081
+  # ─────────────────────────────────────────────
+  flink-jobmanager:
+    image: flink:1.18-scala_2.12-java11
+    container_name: flink-jobmanager
+    networks:
+      - aviation-net
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 4
+        state.backend: filesystem
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        execution.checkpointing.interval: 10000
+    volumes:
+      - ./flink/jobs:/opt/flink/jobs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/overview"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ─────────────────────────────────────────────
+  # 5. FLINK TaskManager — l'ouvrier
+  #    Rôle : exécute les calculs (z-score, seuils...)
+  #    On lance 2 TaskManagers pour 8 capteurs
+  # ─────────────────────────────────────────────
+  flink-taskmanager-1:
+    image: flink:1.18-scala_2.12-java11
+    container_name: flink-taskmanager-1
+    networks:
+      - aviation-net
+    command: taskmanager
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        taskmanager.memory.process.size: 1024m
+
+  flink-taskmanager-2:
+    image: flink:1.18-scala_2.12-java11
+    container_name: flink-taskmanager-2
+    networks:
+      - aviation-net
+    command: taskmanager
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        taskmanager.memory.process.size: 1024m
+
+  # ─────────────────────────────────────────────
+  # 6. CLICKHOUSE — la base de données analytique
+  #    Rôle : stocke toutes les mesures et alertes
+  #    Accès : http://localhost:8123
+  # ─────────────────────────────────────────────
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    container_name: clickhouse
+    networks:
+      - aviation-net
+    ports:
+      - "8123:8123"   # HTTP interface (pour Grafana)
+      - "9000:9000"   # TCP interface (pour Flink)
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      CLICKHOUSE_DB: iot
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────────────────────
+  # 7. GRAFANA — le tableau de bord visuel
+  #    Rôle : affiche les courbes, alertes, jauges
+  #    Accès : http://localhost:3000
+  #    Login : admin / aviation2024
+  # ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    networks:
+      - aviation-net
+    ports:
+      - "3000:3000"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: aviation2024
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+
+  # ─────────────────────────────────────────────
+  # 8. SIMULATEUR PYTHON — les capteurs avion
+  #    Rôle : génère les données de vol et les
+  #           envoie dans Kafka toutes les secondes
+  # ─────────────────────────────────────────────
+  simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    container_name: sensor-simulator
+    networks:
+      - aviation-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: kafka:29092
+      VOL_ID: AV-247
+      SEND_INTERVAL_SEC: 1
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────
+  # 9. FLINK PYTHON JOB — le job d'analyse
+  #    Rôle : lit Kafka, calcule z-score et seuils,
+  #           écrit dans ClickHouse
+  # ─────────────────────────────────────────────
+  flink-job:
+    build:
+      context: ./flink
+      dockerfile: Dockerfile
+    container_name: flink-job
+    networks:
+      - aviation-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      flink-jobmanager:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER: kafka:29092
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      VOL_ID: AV-247
+    restart: on-failure
